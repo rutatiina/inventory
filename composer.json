@@ -1,0 +1,24 @@
+{
+    "name": "rutatiina/inventory",
+    "description": "Load all inventory laravel packages",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Gilbert Rutatiina",
+            "email": "rutatiina@gmail.com"
+        }
+    ],
+    "minimum-stability": "beta",
+    "require": {
+        "laravel/framework": "^8.0",
+        "rutatiina/tenant": "dev-main",
+        "rutatiina/financial-accounting": "dev-main",
+        "rutatiina/tax": "dev-main",
+        "rutatiina/contact": "dev-main",
+        "rutatiina/goods-delivered": "dev-main",
+        "rutatiina/goods-issued": "dev-main",
+        "rutatiina/goods-received": "dev-main",
+        "rutatiina/goods-returned": "dev-main"
+    }
+}
