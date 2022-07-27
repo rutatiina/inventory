@@ -20,5 +20,17 @@
         "rutatiina/goods-issued": "dev-main",
         "rutatiina/goods-received": "dev-main",
         "rutatiina/goods-returned": "dev-main"
+    },
+    "autoload": {
+        "psr-4": {
+            "Rutatiina\\Inventory\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Rutatiina\\Inventory\\InventoryServiceProvider"
+            ]
+        }
     }
 }
