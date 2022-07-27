@@ -5,7 +5,7 @@ namespace Rutatiina\Inventory;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\ServiceProvider;
 
-class InvoiceServiceProvider extends ServiceProvider
+class InventoryServiceProvider extends ServiceProvider
 {
     /**
      * Bootstrap services.
