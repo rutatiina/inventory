@@ -15,7 +15,7 @@ class InventoryServiceProvider extends ServiceProvider
     public function boot()
     {
 
-        include __DIR__.'/routes/routes.php';
+        //include __DIR__.'/routes/routes.php';
         //include __DIR__.'/routes/api.php';
 
         // $this->loadViewsFrom(__DIR__.'/resources/views', 'inventory');
