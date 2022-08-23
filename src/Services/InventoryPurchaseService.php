@@ -1,11 +1,88 @@
 <?php
 
-namespace Rutatiina\Estimate\Services;
+namespace Rutatiina\Inventory\Services;
 
-use Rutatiina\Estimate\Models\EstimateBalance;
+use Illuminate\Support\Facades\Auth;
+use Rutatiina\Inventory\Models\InventoryPurchase;
 
-trait EstimateBalanceService
+trait InventoryPurchaseService
 {
+
+    //get the inventory details of a single item or all items
+    private function get($item)
+    {
+        /*
+            We use credit account for `accountCode` because we only need to read purchases when inventory account is being credited / issued
+        */
+        $query = InventoryPurchase::where('financial_account_code', $this->txn['credit_financial_account_code'])
+            ->where('item_id', $item['type_id'])
+            ->where('currency', $this->txn['base_currency'])
+            ->where('date', '<=', $this->txn['date'])
+            ->where('balance', '>', 0)
+            ->orderBy('date', 'ASC')
+            ->get();
+
+
+        if ($query->isNotEmpty()) {
+
+            $user = auth()->user();
+
+            $purchases = $query->toArray();
+            //print_r($purchases); exit;
+
+            #Evaluate Cost based on Inventory Cost method
+            if (strtoupper($user->tenant->inventory_valuation_method) == 'FIFO') {
+                foreach($purchases as $key => $purchase) {
+                    $purchases[$key]['cost'] = $purchase['value_per_unit'];
+                }
+            }
+
+            elseif (strtoupper($user->tenant->inventory_valuation_method) == 'LIFO') {
+                //Reverse the array since purchases are read from db in FIFO order i.e. date ASC
+                $purchases = array_reverse($purchases);
+
+                foreach($purchases as $key => $purchase) {
+                    $purchases[$key]['cost'] = $purchase['value_per_unit'];
+                }
+            }
+
+            elseif (strtoupper($user->tenant->inventory_valuation_method) == 'AVCO') {
+
+                $total_purchased_units = 0;
+                $total_purchased_value = 0;
+
+                foreach($purchases as $Key => $purchase)
+                {
+                    $total_purchased_units += $purchase['units'];
+                    $total_purchased_value += $purchase['units'] * $purchase['balance'];
+                }
+
+                $average_cost = $total_purchased_value / $total_purchased_units;
+
+                foreach($purchases as $key => $purchase)
+                {
+                    $purchases[$key]['cost'] = $average_cost;
+                }
+            }
+
+            #Actual Unit Cost Method
+            elseif (strtoupper($user->tenant->inventory_valuation_method) == 'AUCO') {
+
+                foreach($purchases as $key => $purchase) {
+                    $purchases[$key]['cost'] = $item['cost'] / $item['units'];
+                }
+            }
+
+            #End of inventory valuation calculation
+
+            return $purchases;
+
+        } else {
+            return false;
+        }
+    }
+    
+    //update the invetory purchase details of the items
     public static function update($txn, $reverse = false)
     {
         if (strtolower($txn['status']) == 'draft')
@@ -20,93 +97,45 @@ trait EstimateBalanceService
             return false;
         }
 
-        //Defaults
-        $total = $txn['total'];
+        $sign = 1;
 
         if ($reverse)
         {
-            $total = $txn['total'] * -1;
+            $sign = -1;
         }
 
-        if (empty($txn['contact_id']))
+        $items = $this->inventoryTrackableItems();
+
+        if (empty($items)) 
         {
-            return true;
+            $this->errors[] = 'Inventory Purchase Error: Item(s) are not product or inventory tracking is not enabled.';
+            return false;
         }
 
-        $currencies = [];
-        $currencies[$txn['base_currency']] = $txn['base_currency'];
-        $currencies[$txn['quote_currency']] = $txn['quote_currency'];
-
-        foreach ($currencies as $currency)
+        foreach($items as $item) 
         {
-            if ($currency == $txn['base_currency'])
-            {
-                //Do nothing because the values are in the base currency
-            }
-            else
-            {
-                $total = $txn['total'] * $txn['exchange_rate'];
-            }
+            //$item_id = (empty($item['parent_id']))? $item['id'] : $item['parent_id']; //Set at item selection
 
-            //1. find the last record
-            $contactBalance = EstimateBalance::where('date', '<=', $txn['date'])
-                //->where('tenant_id', $txn['tenant_id']) //TenantIdScope
-                ->where('currency', $currency)
-                ->where('contact_id', $txn['contact_id'])
-                ->orderBy('date', 'DESC')
-                ->first();
+            $item['units'] = (empty($item['units'])) ? 1 : $item['units'];
+            $units = $item['units'] * $item['quantity'];
 
-            //var_dump($contactBalance->num_rows()); exit;
-
-            switch ($contactBalance)
-            {
-                case null:
-
-                    //create a new balance record
-                    $contactBalanceInsert = new EstimateBalance;
-                    $contactBalanceInsert->tenant_id = $txn['tenant_id'];
-                    $contactBalanceInsert->contact_id = $txn['contact_id'];
-                    $contactBalanceInsert->date = $txn['date'];
-                    $contactBalanceInsert->currency = $currency;
-                    $contactBalanceInsert->balance = 0;
-                    $contactBalanceInsert->save();
-
-                    break;
-
-                default:
-
-                    //create a new row with the last balances
-                    if ($txn['date'] == $contactBalance->date)
-                    {
-                        //do nothing because the records for this dates balances already exists
-                    }
-                    else
-                    {
-                        $contactBalanceInsert = new EstimateBalance;
-                        $contactBalanceInsert->tenant_id = $txn['tenant_id'];
-                        $contactBalanceInsert->contact_id = $txn['contact_id'];
-                        $contactBalanceInsert->date = $txn['date'];
-                        $contactBalanceInsert->currency = $currency;
-                        $contactBalanceInsert->balance = $contactBalance->balance;
-                        $contactBalanceInsert->save();
-                    }
-
-                    break;
-            }
-
-            EstimateBalance::where('date', '>=', $txn['date'])
-                ->where('currency', $currency)
-                ->where('contact_id', $txn['contact_id'])
-                ->increment('balance', $total);
+            //NOTE:: Units & balances fields is only set on purchases
+            // Units fields NEVER edited/updated
+            // balances fields is whats updated cz it shows the units available
+            $InventoryPurchase = new InventoryPurchase;
+            $InventoryPurchase->tenant_id = Auth::user()->tenant->id;
+            $InventoryPurchase->date = $txn['date'];
+            $InventoryPurchase->item_id = $item['type_id'];
+            $InventoryPurchase->batch = $item['batch'];
+            $InventoryPurchase->units = ($sign * $units);
+            $InventoryPurchase->save();
 
         }
-
-        $txn->status = 'approved';
-        $txn->balances_where_updated = 1;
-        $txn->save();
 
         return true;
 
     }
+
+
 
 }

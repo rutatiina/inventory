@@ -4,7 +4,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\Migrations\Migration;
 
-class CreateRgInventoryIssuesTable extends Migration
+class CreateRgInventoryTable extends Migration
 {
     /**
      * Run the migrations.
@@ -13,7 +13,7 @@ class CreateRgInventoryIssuesTable extends Migration
      */
     public function up()
     {
-        Schema::connection('tenant')->create('rg_inventory_issues', function (Blueprint $table) {
+        Schema::connection('tenant')->create('rg_inventory', function (Blueprint $table) {
             $table->bigIncrements('id');
             $table->timestamps();
 
@@ -28,9 +28,23 @@ class CreateRgInventoryIssuesTable extends Migration
             $table->unsignedBigInteger('project_id')->nullable();
             $table->date('date');
             $table->unsignedBigInteger('item_id');
-            $table->string('batch', 50);
-            $table->unsignedInteger('units');
-            $table->unsignedInteger('quantity');
+            $table->char('batch', 100)->nullable();
+
+            $table->unsignedBigInteger('units_received')->default(0);
+            $table->unsignedBigInteger('units_delivered')->default(0);
+            $table->unsignedBigInteger('units_issued')->default(0);
+            $table->unsignedBigInteger('units_returned')->default(0);
+            $table->unsignedBigInteger('units_available')->default(0);
+
+
+            //indexing
+            $table->unique([
+                'tenant_id', 
+                'project_id',
+                'date',
+                'item_id',
+                'batch',
+            ], 'unique_parameters');
         });
     }
 
@@ -41,6 +55,6 @@ class CreateRgInventoryIssuesTable extends Migration
      */
     public function down()
     {
-        Schema::connection('tenant')->dropIfExists('rg_inventory_issues');
+        Schema::connection('tenant')->dropIfExists('rg_inventory');
     }
 }
