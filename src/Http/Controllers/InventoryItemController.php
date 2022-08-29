@@ -44,7 +44,7 @@ class InventoryItemController extends Controller
             return view('ui.limitless::layout_2-ltr-default.appVue');
         }
 
-        $per_page = ($request->per_page) ? $request->per_page : 20;
+        $per_page = ($request->per_page) ? $request->per_page : 50;
 
         $query = Item::query();
 
@@ -72,7 +72,7 @@ class InventoryItemController extends Controller
             });
         }
 
-        $query->latest();
+        $query->orderBy('name', 'asc');
         $txns = $query->paginate($per_page);
 
         $txns->append('inventory');
@@ -130,25 +130,25 @@ class InventoryItemController extends Controller
         }
 
         //Update items delivered
-        $goodsReceived = GoodsDelivered::get();
-        foreach($goodsReceived as $t)
+        $GoodsDelivered = GoodsDelivered::get();
+        foreach($GoodsDelivered as $t)
         {
-            $_t = $t->toArray();
-            foreach($_t['items'] as &$item) 
-            {
-                $_itemModel = Item::find($item['item_id']);
-                $item['inventory_tracking'] = ($_itemModel) ? $_itemModel->inventory_tracking : 0;
-                $item['units'] = (is_numeric($item['units'])) ? $item['units'] : 0;
-            };
-            unset($item);
+            // $_t = $t->toArray();
+            // foreach($_t['items'] as &$item) 
+            // {
+            //     $_itemModel = Item::find($item['item_id']);
+            //     $item['inventory_tracking'] = ($_itemModel) ? $_itemModel->inventory_tracking : 0;
+            //     $item['units'] = (is_numeric($item['units'])) ? $item['units'] : 0;
+            // };
+            // unset($item);
             
-            GoodsDeliveredInventoryService::update($_t);
+            GoodsDeliveredInventoryService::update($t);
         }
         
 
         //update items issued
-        $goodsReceived = GoodsIssued::with('items')->get();
-        foreach($goodsReceived as $t)
+        $GoodsIssued = GoodsIssued::with('items')->get();
+        foreach($GoodsIssued as $t)
         {
             $t->items->map(function ($item, $key) {
                 $item->inventory_tracking = ($item->item) ? $item->item->inventory_tracking : 0;
@@ -160,8 +160,8 @@ class InventoryItemController extends Controller
         }
 
         //update items returned
-        $goodsReceived = GoodsReturned::with('items')->get();
-        foreach($goodsReceived as $t)
+        $GoodsReturned = GoodsReturned::with('items')->get();
+        foreach($GoodsReturned as $t)
         {
             $t->items->map(function ($item, $key) {
                 $item->inventory_tracking = ($item->item) ? $item->item->inventory_tracking : 0;
