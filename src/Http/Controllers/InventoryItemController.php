@@ -56,7 +56,14 @@ class InventoryItemController extends Controller
 
         if ($request->items_with_inventory == 'true')
         {
-            $query->has('inventory_records');
+            // $query->has('inventory_records');
+            $query->whereHas('inventory_records', function ($query) {
+                return $query->where('units_received', '<>', 0)
+                    ->orWhere('units_delivered', '<>', 0)
+                    ->orWhere('units_issued', '<>', 0)
+                    ->orWhere('units_returned', '<>', 0)
+                    ->orWhere('units_available', '<>', 0);
+            });
         }
 
         $query->latest();
