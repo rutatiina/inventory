@@ -3,22 +3,28 @@
 namespace Rutatiina\Inventory\Http\Controllers;
 
 use PDF;
+use Illuminate\Support\Str;
 use Illuminate\Http\Request;
+use Rutatiina\Item\Models\Item;
 use Illuminate\Support\Facades\URL;
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Auth;
 use Yajra\DataTables\Facades\DataTables;
-use Rutatiina\Contact\Traits\ContactTrait;
-use Rutatiina\GoodsReturned\Models\GoodsReturned;
-use Rutatiina\GoodsReturned\Traits\Item as TxnItem;
+use Rutatiina\Inventory\Models\Inventory;
 
+use Rutatiina\Contact\Traits\ContactTrait;
+use Rutatiina\GoodsReceived\Models\GoodsReceived;
+use Rutatiina\GoodsReturned\Models\GoodsReturned;
+use Rutatiina\GoodsDelivered\Models\GoodsDelivered;
+use Rutatiina\GoodsReturned\Traits\Item as TxnItem;
 use Illuminate\Support\Facades\Request as FacadesRequest;
 use Rutatiina\GoodsReturned\Services\GoodsReturnedService;
 use Rutatiina\FinancialAccounting\Traits\FinancialAccountingTrait;
-use Rutatiina\Inventory\Models\Inventory;
-use Rutatiina\Item\Models\Item;
-use Illuminate\Support\Str;
-
+use Rutatiina\GoodsReceived\Services\GoodsReceivedInvetoryService;
+use Rutatiina\GoodsDelivered\Services\GoodsDeliveredInventoryService;
+use Rutatiina\GoodsIssued\Models\GoodsIssued;
+use Rutatiina\GoodsIssued\Services\GoodsIssuedInventoryService;
+use Rutatiina\GoodsReturned\Services\GoodsReturnedInventoryService;
 
 class InventoryItemController extends Controller
 {
@@ -102,6 +108,75 @@ class InventoryItemController extends Controller
     }
 
 	#-----------------------------------------------------------------------------------
+
+    public function recompute()
+    {
+
+        //delete all previous inventory data
+        Inventory::where('id', '>', 0)->delete();
+
+        //Update items received
+        $goodsReceived = GoodsReceived::with('items')->get();
+        //return $goodsReceived->first()->toArray();
+        foreach($goodsReceived as $t)
+        {
+            $t->items->map(function ($item, $key) {
+                $item->inventory_tracking = ($item->item) ? $item->item->inventory_tracking : 0;
+                return $item;
+            });
+            unset($item);
+
+            GoodsReceivedInvetoryService::update($t->toArray());
+        }
+
+        //Update items delivered
+        $goodsReceived = GoodsDelivered::get();
+        foreach($goodsReceived as $t)
+        {
+            $_t = $t->toArray();
+            foreach($_t['items'] as &$item) 
+            {
+                $_itemModel = Item::find($item['item_id']);
+                $item['inventory_tracking'] = ($_itemModel) ? $_itemModel->inventory_tracking : 0;
+                $item['units'] = (is_numeric($item['units'])) ? $item['units'] : 0;
+            };
+            unset($item);
+            
+            GoodsDeliveredInventoryService::update($_t);
+        }
+        
+
+        //update items issued
+        $goodsReceived = GoodsIssued::with('items')->get();
+        foreach($goodsReceived as $t)
+        {
+            $t->items->map(function ($item, $key) {
+                $item->inventory_tracking = ($item->item) ? $item->item->inventory_tracking : 0;
+                return $item;
+            });
+            unset($item);
+
+            GoodsIssuedInventoryService::update($t->toArray());
+        }
+
+        //update items returned
+        $goodsReceived = GoodsReturned::with('items')->get();
+        foreach($goodsReceived as $t)
+        {
+            $t->items->map(function ($item, $key) {
+                $item->inventory_tracking = ($item->item) ? $item->item->inventory_tracking : 0;
+                return $item;
+            });
+            unset($item);
+
+            GoodsReturnedInventoryService::update($t->toArray());
+        }
+
+        return [
+            'status' => true,
+            'messages' => ['Inventory recomputing complete'],
+        ];
+    }
 
     
 
