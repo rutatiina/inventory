@@ -25,6 +25,7 @@ use Rutatiina\GoodsDelivered\Services\GoodsDeliveredInventoryService;
 use Rutatiina\GoodsIssued\Models\GoodsIssued;
 use Rutatiina\GoodsIssued\Services\GoodsIssuedInventoryService;
 use Rutatiina\GoodsReturned\Services\GoodsReturnedInventoryService;
+use Rutatiina\POS\Models\POSOrder;
 
 class InventoryItemController extends Controller
 {
@@ -115,34 +116,29 @@ class InventoryItemController extends Controller
         //delete all previous inventory data
         Inventory::where('id', '>', 0)->delete();
 
+        //delete any delivery not with itemable_key pos_order_id
+        GoodsDelivered::where('itemable_key', 'pos_order_id')->forceDelete();
+
         //Update items received
         $goodsReceived = GoodsReceived::with('items')->get();
         //return $goodsReceived->first()->toArray();
         foreach($goodsReceived as $t)
         {
-            $t->items->map(function ($item, $key) {
-                $item->inventory_tracking = ($item->item) ? $item->item->inventory_tracking : 0;
-                return $item;
-            });
-            unset($item);
-
             GoodsReceivedInvetoryService::update($t->toArray());
         }
 
+        //update items in POS orders
+        $POSOrder = POSOrder::with('items')->get();
+        foreach($POSOrder as $t)
+        {   
+            GoodsDeliveredInventoryService::update($t->toArray());
+        }
+
         //Update items delivered
-        $GoodsDelivered = GoodsDelivered::get();
+        $GoodsDelivered = GoodsDelivered::with('items')->get();
         foreach($GoodsDelivered as $t)
-        {
-            // $_t = $t->toArray();
-            // foreach($_t['items'] as &$item) 
-            // {
-            //     $_itemModel = Item::find($item['item_id']);
-            //     $item['inventory_tracking'] = ($_itemModel) ? $_itemModel->inventory_tracking : 0;
-            //     $item['units'] = (is_numeric($item['units'])) ? $item['units'] : 0;
-            // };
-            // unset($item);
-            
-            GoodsDeliveredInventoryService::update($t);
+        {   
+            GoodsDeliveredInventoryService::update($t->toArray());
         }
         
 
@@ -150,12 +146,6 @@ class InventoryItemController extends Controller
         $GoodsIssued = GoodsIssued::with('items')->get();
         foreach($GoodsIssued as $t)
         {
-            $t->items->map(function ($item, $key) {
-                $item->inventory_tracking = ($item->item) ? $item->item->inventory_tracking : 0;
-                return $item;
-            });
-            unset($item);
-
             GoodsIssuedInventoryService::update($t->toArray());
         }
 
@@ -163,12 +153,6 @@ class InventoryItemController extends Controller
         $GoodsReturned = GoodsReturned::with('items')->get();
         foreach($GoodsReturned as $t)
         {
-            $t->items->map(function ($item, $key) {
-                $item->inventory_tracking = ($item->item) ? $item->item->inventory_tracking : 0;
-                return $item;
-            });
-            unset($item);
-
             GoodsReturnedInventoryService::update($t->toArray());
         }
 
