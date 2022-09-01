@@ -46,6 +46,13 @@ class UpdateColumnsToAllowDecimals extends Migration
             Schema::connection('tenant')->table($t, function (Blueprint $table) {
                 $table->decimal('quantity', 61, 4)->default(0)->change();
             });
+
+            if (Schema::connection('tenant')->hasColumn($t, 'units')) {
+                Schema::connection('tenant')->table($t, function (Blueprint $table) {
+                    $table->decimal('units', 61, 4)->default(0)->change();
+                });
+            }
+        
         }
 
         $tablesAmount = [
