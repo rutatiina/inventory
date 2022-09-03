@@ -26,6 +26,7 @@ use Rutatiina\GoodsIssued\Models\GoodsIssued;
 use Rutatiina\GoodsIssued\Services\GoodsIssuedInventoryService;
 use Rutatiina\GoodsReturned\Services\GoodsReturnedInventoryService;
 use Rutatiina\POS\Models\POSOrder;
+use Rutatiina\Sales\Models\Sales;
 
 class InventoryItemController extends Controller
 {
@@ -130,6 +131,13 @@ class InventoryItemController extends Controller
         //update items in POS orders
         $POSOrder = POSOrder::with('items')->get();
         foreach($POSOrder as $t)
+        {   
+            GoodsDeliveredInventoryService::update($t->toArray());
+        }
+
+        //update items in Sales
+        $sales = Sales::with('items')->get();
+        foreach($sales as $t)
         {   
             GoodsDeliveredInventoryService::update($t->toArray());
         }
