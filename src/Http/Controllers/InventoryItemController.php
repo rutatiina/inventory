@@ -222,9 +222,12 @@ class InventoryItemController extends Controller
             }
         }
 
+        $item = Item::find($id);
+        $item->append('inventory');
 
         return [
-            'tableData' => $txns
+            'tableData' => $txns,
+            'item' => $item
         ];
     }
 
