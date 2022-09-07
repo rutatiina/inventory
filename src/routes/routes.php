@@ -8,7 +8,8 @@ Route::group(['middleware' => ['web', 'auth', 'tenant']], function() {
 
 	Route::prefix('inventory')->group(function () {
 
-        Route::get('items', [InventoryItemController::class, 'index']);
+        Route::get('items', [InventoryItemController::class, 'items']);
+        Route::get('items/{id}', [InventoryItemController::class, 'item']);
         Route::post('recompute', [InventoryItemController::class, 'recompute']);
 
     });
