@@ -34,13 +34,14 @@ class InventoryTrackingColumnUpdateSeeder extends Seeder
 
          foreach ($items as $k => $item) 
          {
-            $itemModel = Item::find($item->item_id);
+            $itemModel = Item::withoutGlobalScopes()->where('id', $item->item_id)->first();
 
             if ($itemModel && $itemModel->inventory_tracking) 
             {
                DB::connection('tenant')->table($table)->where('id', $item->id)->update([
                   'inventory_tracking' => 1
                ]);
+               $this->command->line($table.'/'.$item->id . ' - ' . $item->inventory_tracking);
             }
          }
       }
