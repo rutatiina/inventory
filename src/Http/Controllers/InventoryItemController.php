@@ -29,7 +29,7 @@ use Illuminate\Support\Facades\Request as FacadesRequest;
 use Rutatiina\GoodsReturned\Services\GoodsReturnedService;
 use Rutatiina\GoodsIssued\Services\GoodsIssuedInventoryService;
 use Rutatiina\FinancialAccounting\Traits\FinancialAccountingTrait;
-use Rutatiina\GoodsReceived\Services\GoodsReceivedInvetoryService;
+use Rutatiina\GoodsReceived\Services\GoodsReceivedInventoryService;
 use Rutatiina\GoodsReturned\Services\GoodsReturnedInventoryService;
 use Rutatiina\GoodsDelivered\Services\GoodsDeliveredInventoryService;
 
@@ -267,7 +267,7 @@ class InventoryItemController extends Controller
         //return $goodsReceived->first()->toArray();
         foreach($goodsReceived as $t)
         {
-            GoodsReceivedInvetoryService::update($t->toArray());
+            GoodsReceivedInventoryService::update($t->toArray());
         }
 
         //update items in POS orders
