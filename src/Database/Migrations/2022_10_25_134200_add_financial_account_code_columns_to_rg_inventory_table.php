@@ -26,7 +26,7 @@ class AddFinancialAccountCodeColumnsToRgInventoryTable extends Migration
     public function down()
     {
         Schema::connection('tenant')->table('rg_inventory', function (Blueprint $table) {
-            $table->removeColumn('financial_account_code');
+            $table->dropColumn('financial_account_code');
         });
     }
 }
