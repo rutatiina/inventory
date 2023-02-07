@@ -9,26 +9,21 @@ use Rutatiina\Item\Models\Item;
 use Rutatiina\Sales\Models\Sales;
 use Illuminate\Support\Facades\DB;
 use Rutatiina\POS\Models\POSOrder;
-use Illuminate\Support\Facades\URL;
-use App\Http\Controllers\Controller;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\App;
 
-use Illuminate\Support\Facades\Auth;
+use App\Http\Controllers\Controller;
 use Rutatiina\Sales\Models\SalesItem;
 use Rutatiina\POS\Models\POSOrderItem;
-use Yajra\DataTables\Facades\DataTables;
 use Rutatiina\Inventory\Models\Inventory;
-use Rutatiina\Contact\Traits\ContactTrait;
 use Rutatiina\GoodsIssued\Models\GoodsIssued;
 use Rutatiina\GoodsReceived\Models\GoodsReceived;
 use Rutatiina\GoodsReturned\Models\GoodsReturned;
 use Rutatiina\GoodsDelivered\Models\GoodsDelivered;
-use Rutatiina\GoodsReturned\Traits\Item as TxnItem;
 use Rutatiina\GoodsReceived\Models\GoodsReceivedItem;
 use Rutatiina\GoodsDelivered\Models\GoodsDeliveredItem;
 use Illuminate\Support\Facades\Request as FacadesRequest;
-use Rutatiina\GoodsReturned\Services\GoodsReturnedService;
 use Rutatiina\GoodsIssued\Services\GoodsIssuedInventoryService;
-use Rutatiina\FinancialAccounting\Traits\FinancialAccountingTrait;
 use Rutatiina\GoodsReceived\Services\GoodsReceivedInventoryService;
 use Rutatiina\GoodsReturned\Services\GoodsReturnedInventoryService;
 use Rutatiina\GoodsDelivered\Services\GoodsDeliveredInventoryService;
@@ -92,17 +87,12 @@ class InventoryItemController extends Controller
     public function item(Request $request, $id)
     {
         //load the vue version of the app
-        if (!FacadesRequest::wantsJson()) {
+        if (!FacadesRequest::wantsJson()) 
+        {
             return view('ui.limitless::layout_2-ltr-default.appVue');
         }
 
         $per_page = ($request->per_page) ? $request->per_page : 20;
-
-        $txns = GoodsReceived::with(['items' => function ($q) use($id) {
-                $q->where('item_id', $id);
-            }])
-            ->orderBy('id','desc')
-            ->paginate($per_page);
 
         //goods delivered
         $goodsDelivered = DB::connection('tenant')
@@ -113,10 +103,16 @@ class InventoryItemController extends Controller
             DB::raw("'goods-delivered' as link")
         )
         ->where('tenant_id', session('tenant_id'))
+        ->whereNull('deleted_at')
+        ->where('status', 'approved')
         ->where(function($q) {
-            $q->whereNotIn('status', ['edited']);
-            $q->orWhereNull('status');
+            $q->where('canceled', 0);
+            $q->orWhereNull('canceled');
         })
+        // ->where(function($q) {
+        //     $q->whereNotIn('status', ['edited']);
+        //     $q->orWhereNull('status');
+        // })
         ->whereExists(function($query) use ($id) {
             $query->select(DB::raw(1))
                 ->from('rg_goods_delivered_items')
@@ -133,10 +129,16 @@ class InventoryItemController extends Controller
             DB::raw("'pos/orders' as link")
         )
         ->where('tenant_id', session('tenant_id'))
+        ->whereNull('deleted_at')
+        ->where('status', 'approved')
         ->where(function($q) {
-            $q->whereNotIn('status', ['edited']);
-            $q->orWhereNull('status');
+            $q->where('canceled', 0);
+            $q->orWhereNull('canceled');
         })
+        // ->where(function($q) {
+        //     $q->whereNotIn('status', ['edited']);
+        //     $q->orWhereNull('status');
+        // })
         ->whereExists(function($query) use ($id) {
             $query->select(DB::raw(1))
                 ->from('rg_pos_order_items')
@@ -153,10 +155,16 @@ class InventoryItemController extends Controller
             DB::raw("'sales' as link")
         )
         ->where('tenant_id', session('tenant_id'))
+        ->whereNull('deleted_at')
+        ->where('status', 'approved')
         ->where(function($q) {
-            $q->whereNotIn('status', ['edited']);
-            $q->orWhereNull('status');
+            $q->where('canceled', 0);
+            $q->orWhereNull('canceled');
         })
+        // ->where(function($q) {
+        //     $q->whereNotIn('status', ['edited']);
+        //     $q->orWhereNull('status');
+        // })
         ->whereExists(function($query) use ($id) {
             $query->select(DB::raw(1))
                 ->from('rg_sales_items')
@@ -172,10 +180,16 @@ class InventoryItemController extends Controller
             DB::raw("'goods-received' as link")
         )
         ->where('tenant_id', session('tenant_id'))
+        ->whereNull('deleted_at')
+        ->where('status', 'approved')
         ->where(function($q) {
-            $q->whereNotIn('status', ['edited']);
-            $q->orWhereNull('status');
+            $q->where('canceled', 0);
+            $q->orWhereNull('canceled');
         })
+        // ->where(function($q) {
+        //     $q->whereNotIn('status', ['edited']);
+        //     $q->orWhereNull('status');
+        // })
         ->whereExists(function($query) use ($id) {
             $query->select(DB::raw(1))
                 ->from('rg_goods_received_items')
@@ -255,61 +269,100 @@ class InventoryItemController extends Controller
 
     public function recompute()
     {
+        //start database transaction
+        DB::connection('tenant')->beginTransaction();
 
-        //delete all previous inventory data
-        Inventory::where('id', '>', 0)->delete();
-
-        //delete any delivery not with itemable_key pos_order_id
-        GoodsDelivered::where('itemable_key', 'pos_order_id')->forceDelete();
-
-        //Update items received
-        $goodsReceived = GoodsReceived::with('items')->get();
-        //return $goodsReceived->first()->toArray();
-        foreach($goodsReceived as $t)
+        try
         {
-            GoodsReceivedInventoryService::update($t->toArray());
-        }
+            //delete all previous inventory data
+            Inventory::where('id', '>', 0)->forceDelete();
 
-        //update items in POS orders
-        $POSOrder = POSOrder::with('items')->get();
-        foreach($POSOrder as $t)
-        {   
-            GoodsDeliveredInventoryService::update($t->toArray());
-        }
+            //delete any delivery not with itemable_key pos_order_id
+            GoodsDelivered::where('itemable_key', 'pos_order_id')->forceDelete();
 
-        //update items in Sales
-        $sales = Sales::with('items')->get();
-        foreach($sales as $t)
-        {   
-            GoodsDeliveredInventoryService::update($t->toArray());
-        }
+            //Update items received
+            $goodsReceived = GoodsReceived::with(['items', 'inputs'])->approved()->notCancelled()->get();
+            //return $goodsReceived->first()->toArray();
+            foreach($goodsReceived as $t)
+            {
+                GoodsReceivedInventoryService::update($t->toArray());
+            }
 
-        //Update items delivered
-        $GoodsDelivered = GoodsDelivered::with('items')->get();
-        foreach($GoodsDelivered as $t)
-        {   
-            GoodsDeliveredInventoryService::update($t->toArray());
-        }
-        
+            //update items in POS orders
+            $POSOrder = POSOrder::with('items')->approved()->notCancelled()->get();
+            foreach($POSOrder as $t)
+            {   
+                GoodsDeliveredInventoryService::update($t->toArray());
+            }
 
-        //update items issued
-        $GoodsIssued = GoodsIssued::with('items')->get();
-        foreach($GoodsIssued as $t)
+            //update items in Sales
+            $sales = Sales::with('items')->approved()->notCancelled()->get();
+            foreach($sales as $t)
+            {   
+                GoodsDeliveredInventoryService::update($t->toArray());
+            }
+
+            //Update items delivered
+            $GoodsDelivered = GoodsDelivered::with('items')->approved()->notCancelled()->get();
+            foreach($GoodsDelivered as $t)
+            {   
+                GoodsDeliveredInventoryService::update($t->toArray());
+            }
+            
+
+            //update items issued
+            $GoodsIssued = GoodsIssued::with('items')->approved()->notCancelled()->get();
+            foreach($GoodsIssued as $t)
+            {
+                GoodsIssuedInventoryService::update($t->toArray());
+            }
+
+            //update items returned
+            $GoodsReturned = GoodsReturned::with('items')->approved()->notCancelled()->get();
+            foreach($GoodsReturned as $t)
+            {
+                GoodsReturnedInventoryService::update($t->toArray());
+            }
+
+            DB::connection('tenant')->commit();
+
+            return [
+                'status' => true,
+                'messages' => ['Inventory recomputing complete'],
+            ];
+        }
+        catch (\Throwable $e)
         {
-            GoodsIssuedInventoryService::update($t->toArray());
-        }
+            $errors = [];
 
-        //update items returned
-        $GoodsReturned = GoodsReturned::with('items')->get();
-        foreach($GoodsReturned as $t)
-        {
-            GoodsReturnedInventoryService::update($t->toArray());
-        }
+            DB::connection('tenant')->rollBack();
 
-        return [
-            'status' => true,
-            'messages' => ['Inventory recomputing complete'],
-        ];
+            Log::critical('Fatal Internal Error: Failed to save Goods Received to database');
+            Log::critical($e);
+
+            //print_r($e); exit;
+            if (isset($e->errorInfo[1]) && $e->errorInfo[1] == 1690)
+            {
+                $errors[] = 'Oops: Item inventory / stock is not enough';
+            }
+            elseif (App::environment('local'))
+            {
+                $errors[] = 'Error: Failed to save Goods Received to database.';
+                $errors[] = 'File: ' . $e->getFile();
+                $errors[] = 'Line: ' . $e->getLine();
+                $errors[] = 'Message: ' . $e->getMessage();
+            }
+            else
+            {
+                $errors[] = 'Fatal Internal Error: Failed to save Goods Received to database. Please contact Admin';
+            }
+
+            return [
+                'status' => false,
+                'messages' => $errors,
+            ];
+        }
+        //*/
     }
 
     
